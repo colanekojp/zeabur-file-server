@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "public", "uploads");
-const TOKEN = process.env.UPLOAD_TOKEN || "colanekojpcolameme0711";
+const TOKEN = process.env.UPLOAD_TOKEN || "";
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
