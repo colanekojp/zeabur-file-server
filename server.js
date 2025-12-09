@@ -23,22 +23,47 @@ function requireBearer(req, res, next) {
   next();
 }
 
+// 可接受的檔案類型（影片 + 圖片）
+const ALLOWED_MIMES = {
+  "video/mp4": ".mp4",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
-    const orig = file.originalname || "video.mp4";
-    const ext = path.extname(orig) || ".mp4";
+    const orig = file.originalname || "file";
+    // 盡量用上傳檔案自己的副檔名
+    let ext = path.extname(orig);
+
+    // 如果原檔名沒副檔名，就用 mimetype 補一個
+    if (!ext && ALLOWED_MIMES[file.mimetype]) {
+      ext = ALLOWED_MIMES[file.mimetype];
+    }
+
     const wanted = (req.body.name || "").trim();
-    const safe = wanted && /^[\w\-\.]+$/.test(wanted) ? wanted : `${uuid()}${ext}`;
+
+    // 允許你從外部指定檔名（不含奇怪字元）
+    const safe =
+      wanted && /^[\w\-\.]+$/.test(wanted)
+        ? (ext ? wanted : `${wanted}${ext}`)
+        : `${uuid()}${ext || ""}`;
+
     cb(null, safe);
   },
 });
+
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 影片限制 500MB，圖片也一起用這個上限
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === "video/mp4") cb(null, true);
-    else cb(new Error("Only video/mp4 is allowed"));
+    if (ALLOWED_MIMES[file.mimetype]) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only video/mp4 or image files (jpeg/png/webp) are allowed"));
+    }
   },
 });
 
@@ -46,11 +71,12 @@ app.use("/files", express.static(UPLOAD_DIR, { maxAge: "1h", etag: false }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+// 這裡不用改，影片 / 封面都走同一支 /upload
 app.post("/upload", requireBearer, upload.single("file"), (req, res) => {
   const filename = req.file.filename;
   const host = process.env.PUBLIC_BASE || `${req.protocol}://${req.get("host")}`;
   const url = `${host}/files/${encodeURIComponent(filename)}`;
-  res.json({ url, filename, size: req.file.size });
+  res.json({ url, filename, size: req.file.size, mimetype: req.file.mimetype });
 });
 
 app.delete("/files/:name", requireBearer, (req, res) => {
